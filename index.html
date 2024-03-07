@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE-edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Open Street Map con Marcadores y Rutas</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+        integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI=" crossorigin="" />
+    <link rel="stylesheet" href="https://cdn.rawgit.com/perliedman/leaflet-routing-machine/3.2.12/dist/leaflet-routing-machine.css" />
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
+        integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM=" crossorigin=""></script>
+    <script src="https://cdn.rawgit.com/perliedman/leaflet-routing-machine/3.2.12/dist/leaflet-routing-machine.js"></script>
+</head>
+<body>
+    <div id="mi_mapa" style="width: 100%; height: 500px;"></div>
+    <form id="buscarDireccionForm">
+        <label for="direccion">Buscar Dirección en Bogotá:</label>
+        <input type="text" id="direccion" name="direccion" placeholder="Ej. Calle 123, Bogotá">
+        <button type="button" id="buscarDireccion">Buscar</button>
+    </form>
+    <button type="button" id="borrarMarcadores">Borrar Marcadores y Ruta</button>
+    <script>
+        let map = L.map('mi_mapa').setView([4.6097, -74.0817], 12); // Ubicación de Bogotá
+        let markers = [];
+        let routingControl = null; // Almacena la instancia de la ruta
+        let addressMarker = null; // Almacena el marcador de dirección
+
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        map.on('dblclick', function(event) {
+            const latitud = event.latlng.lat;
+            const longitud = event.latlng.lng;
+            agregarMarcador(latitud, longitud);
+        });
+
+        function agregarMarcador(latitud, longitud) {
+            // Agrega un marcador en la ubicación
+            const marker = L.marker([latitud, longitud]).addTo(map);
+            markers.push(marker);
+
+            // Si hay dos marcadores, crea una ruta automáticamente
+            if (markers.length === 2) {
+                crearRuta(markers[0].getLatLng(), markers[1].getLatLng());
+            }
+        }
+
+        function crearRuta(punto1, punto2) {
+            // Elimina la ruta anterior si existe
+            if (routingControl) {
+                map.removeControl(routingControl);
+            }
+            
+            routingControl = L.Routing.control({
+                waypoints: [punto1, punto2],
+                routeWhileDragging: true,
+            }).addTo(map);
+        }
+
+        document.getElementById('buscarDireccion').addEventListener('click', function() {
+            const direccion = document.getElementById('direccion').value;
+
+            if (direccion) {
+                // Utiliza el servicio de geocodificación Nominatim para buscar la dirección
+                const ciudad = "Bogotá";
+                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(direccion)},${ciudad},Colombia`;
+
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.length > 0) {
+                            const latitud = parseFloat(data[0].lat);
+                            const longitud = parseFloat(data[0].lon);
+
+                            if (!isNaN(latitud) && !isNaN(longitud)) {
+                                // Elimina el marcador de dirección anterior si existe
+                                if (addressMarker) {
+                                    map.removeLayer(addressMarker);
+                                }
+
+                                // Agrega un marcador en la ubicación encontrada
+                                addressMarker = L.marker([latitud, longitud]).addTo(map);
+                                addressMarker.bindPopup(direccion).openPopup();
+
+                                // Agrega el marcador a la lista de marcadores
+                                markers.push(addressMarker);
+
+                                // Si hay dos marcadores, crea una ruta automáticamente
+                                if (markers.length === 2) {
+                                    crearRuta(markers[0].getLatLng(), markers[1].getLatLng());
+                                }
+                            } else {
+                                alert('No se pudieron obtener las coordenadas de la dirección.');
+                            }
+                        } else {
+                            alert('No se encontraron resultados para la dirección proporcionada en Bogotá.');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error en la solicitud de geocodificación:', error);
+                        alert('Hubo un error al buscar la dirección.');
+                    });
+            } else {
+                alert('Por favor, ingresa una dirección para buscar.');
+            }
+        });
+
+        document.getElementById('borrarMarcadores').addEventListener('click', function() {
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+            // Elimina la ruta anterior si existe
+            if (routingControl) {
+                map.removeControl(routingControl);
+            }
+            // Elimina el marcador de dirección si existe
+            if (addressMarker) {
+                map.removeLayer(addressMarker);
+                addressMarker = null;
+            }
+        });
+    </script>
+</body>
+</html>
+
